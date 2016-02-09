@@ -1,0 +1,31 @@
+/**
+ * All of the CSS for your admin-specific functionality should be
+ * included in this file.
+ */
+
+.iwm-category-level-1{
+    font-weight: bold;
+}
+.iwm-category-level-2{
+    font-weight: normal;
+}
+.iwm-category-level-3{
+    font-weight: 100;
+}
+.iwm-category-level-2 td:not(.iwm-category-buttons){
+    padding-left: 20px;
+}
+.iwm-category-level-3 td:not(.iwm-category-buttons){
+    padding-left: 35px;
+}
+a{
+    cursor: pointer;
+}
+
+tr.iwm_item_saved td {
+    background: #4DF507;
+}
+
+tr.iwm_item_failed td {
+    background: #ff0000;
+}
