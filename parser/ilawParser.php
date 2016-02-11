@@ -1,7 +1,11 @@
 <?php
-include( 'simple_html_dom.php' );
+ini_set('max_execution_time', 300);
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+include_once( 'simple_html_dom.php' );
 
-$parser = new ilawParser();
+//$parser = new ilawParser();
 
 class ilawParser{
 
@@ -11,13 +15,16 @@ class ilawParser{
     private $_url = '';
     private $_url_hash = '';
     private $_article_html = null;
+    private $_domain = 'http://www.illawarramercury.com.au/';
 
     public function __construct(){
 
-        $this->_getArticleFromUrl( 'http://www.illawarramercury.com.au/story/3701865/mayors-performance-a-complete-disgrace/' );
+//        $this->getArticleFromUrl( 'story/3722593/wollongong-prisoner-transfers-up-450-per-cent-union/?cs=300' );
     }
 
-    private function _getArticleFromUrl( $url ){
+    public function getArticleFromUrl( $url ){
+        $url = $this->_domain . trim($url, '/');;
+
         $this->_url = $url;
         $this->_url_hash = md5($url);
 
@@ -30,8 +37,11 @@ class ilawParser{
 
         $this->_article_html = $article_html;
 
-        $this->_getCategoryFromArticle(  );
-        $this->_getArticle( );
+        $this->_getMetaFromArticle();
+        $this->_getCategoryFromArticle();
+        $this->_getArticle();
+
+        return $this->_articles;
 
         echo '<pre>';
         print_r($this->_articles);
@@ -57,6 +67,17 @@ class ilawParser{
         $this->_getBodyFromArticle( $article_body );
     }
 
+    private function _getMetaFromArticle(){
+        $this->_articles[$this->_url_hash]['meta'] = array( 'title' => '', 'description'=>'' );
+
+        try{
+            $this->_articles[$this->_url_hash]['meta']['title'] =  $this->_article_html->find( 'meta[name=title]', 0 )->getAttribute('content');
+            $this->_articles[$this->_url_hash]['meta']['description'] =  $this->_article_html->find( 'meta[name=description]', 0 )->getAttribute('content');
+        } catch( Exception $e ){
+
+        }
+    }
+
 
     private function _getBodyFromArticle( $article_body ){
         $this->_articles[$this->_url_hash]['body'] = '';
@@ -65,15 +86,29 @@ class ilawParser{
 
         //let's remove the unnecessary data
         try{
-            $summary = $article_body->find( 'p[class=summary]', 0 )->outertext;
+            $summary = trim( $article_body->find( 'p[class=summary]', 0 )->outertext );
             $article_body_text = str_replace( $summary, '', $article_body_text );
         } catch( Exception $e){
         }
         try{
-            $image = $article_body->find( 'div[class=story-images]', 0 )->outertext;
-            $article_body_text = str_replace( $image, '', $article_body_text );
+            $image = $article_body->find( 'div[class=story-images]', 0 );
+            if( !is_null( $image ) ){
+                $article_body_text = str_replace( $image->outertext, '', $article_body_text );
+            }
+
         } catch( Exception $e){
         }
+
+        try{
+            $image = $article_body->find( 'div[class=carousel-overlay-container]', 0 );
+            if( !is_null( $image ) ){
+                $article_body_text = str_replace( $image->outertext, '', $article_body_text );
+            }
+
+        } catch( Exception $e){
+        }
+
+
         try{
             $aside_divs = $article_body->find( 'div[class=aside]' );
             foreach( $aside_divs as $aside_div ){
@@ -87,16 +122,52 @@ class ilawParser{
     }
 
     private function _getImageFromArticle( $article_body ){
-        $this->_articles[$this->_url_hash]['image'] = '';
+        $this->_articles[$this->_url_hash]['image'] = array( 'src'=>'', 'alt'=>'', 'title'=>'' );
+        $this->_articles[$this->_url_hash]['slides'] = array();
+
+        //array( 'src'=>'', 'alt'=>'', 'title'=>'' );
 
         try{
             $img_div = $article_body->find( 'div[class=story-images]', 0 );
 
-            if( is_null( $img_div ) ) return;
+            if( !is_null( $img_div ) ) {
 
-            $this->_articles[$this->_url_hash]['image'] = $img_div->find( 'img', 0 )->getAttribute('data-src');
+                $article_image = $img_div->find('img', 0);
+
+                if( !is_null( $article_image ) ) {
+
+                    $this->_articles[$this->_url_hash]['image']['src'] = $img_div->find('img', 0)->getAttribute('data-src');
+                    $this->_articles[$this->_url_hash]['image']['alt'] = $img_div->find('img', 0)->getAttribute('alt');
+                    $this->_articles[$this->_url_hash]['image']['title'] = $img_div->find('img', 0)->getAttribute('title');
+                }
+            }
         } catch( Exception $e ){
-            return;
+            //return;
+        }
+
+        //let's try and get the slides, if any
+        try{
+            $slides_ul = $article_body->find( 'ul[class=slides]', 0 );
+            if( !is_null( $slides_ul ) ){
+                $slides = $slides_ul->find('li');
+                if( !is_null( $slides ) ){
+                    foreach( $slides as $li ){
+                        $slide_ar = array( 'src'=>'', 'alt'=>'', 'title'=>'' );
+                        $img_slide = $li->find( 'img', 0 );
+
+                        if( !is_null( $img_slide ) ){
+                            $slide_ar['src'] = $img_slide->getAttribute('data-src');
+                            $slide_ar['alt'] = $img_slide->getAttribute('alt');
+                            $slide_ar['title'] = $img_slide->getAttribute('title');
+
+                            $this->_articles[$this->_url_hash]['slides'][] = $slide_ar;
+                        }
+                    }
+                }
+            }
+
+        } catch( Exception $e ){
+
         }
     }
 
@@ -104,7 +175,7 @@ class ilawParser{
         $this->_articles[$this->_url_hash]['summary'] = '';
 
         try{
-            $this->_articles[$this->_url_hash]['summary'] = $article_body->find( 'p[class=summary]', 0 )->innertext;
+            $this->_articles[$this->_url_hash]['summary'] = trim( $article_body->find( 'p[class=summary]', 0 )->innertext );
         } catch( Exception $e ){
             return;
         }
@@ -141,7 +212,7 @@ class ilawParser{
 
     private function _getCategoryFromArticle(){
         $article_html = $this->_article_html;
-        $this->_articles[$this->_url_hash]['categories'] = array();
+        $this->_articles[$this->_url_hash]['categories'] = array( 'last'=>array() );
 
         $breadcrumb = $article_html->find('div[class=breadcrumb]', 0);
 
@@ -166,6 +237,7 @@ class ilawParser{
         }
 
         $this->_articles[$this->_url_hash]['categories'] = $categories;
+
         return;
 
     }
